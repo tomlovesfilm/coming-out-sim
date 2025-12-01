@@ -129,7 +129,7 @@ body {
         <!-- Tab 1: 退出 -->
         <div id="tab-exit" class="hidden">
             <div class="cat-anim">🐈</div>
-            <div style="color:#666;line-height:2">
+            <div style="color:#8dd777;line-height:2">
                 <p>你放下了手机。</p>
                 <p>今天不想面对那些声音。</p>
                 <p>猫咪跳上膝盖，呼噜呼噜。</p>
@@ -188,7 +188,7 @@ body {
 
     <script>
         // 🔴 这里修改聊天角色配置
-        const contacts = [
+        const initialContacts = [
             { 
                 // 特殊角色：女朋友 (置顶)
                 id: 'gf_real', name: '女朋友 ❤️', color: '#ff9a9e', emoji: '👩‍❤️‍💋‍👩', isPinned: true,
@@ -203,7 +203,7 @@ body {
                 scenarios: [
                     ["我在呢。一直都在。", "不管结果怎么样，我们都回家。", "大不了我们私奔，去没人认识我们的地方。", "爱你 ❤️"],
                     ["抱抱！我刚才手心全是汗，一直在等你消息。", "我也准备跟我爸说了。", "我们要一直在一起。", "今晚吃顿好的压压惊！"],
-                    ["老婆真棒！😭", "无论发生什么，我都站在你身后。", "今晚回家给你按摩！", "永远爱你。"]
+                    ["宝宝真棒！😭", "无论发生什么，我都会陪着你。", "今晚回家给你按摩！", "永远爱你。"]
                 ]
             },
             { 
@@ -280,6 +280,12 @@ body {
             }
         ];
 
+        // 在它下面新增一个变量，用来存放游戏中的实时数据
+let contacts = []; 
+
+// 定义一个变量标记游戏是否结束
+let isGameEnded = false;
+
         // 🔴 这里修改朋友圈预设动态
         const dummyMoments = [
             { name: "HR-Linda", emoji: "👠", text: "又是加班的一天，咖啡续命☕️", time: "20分钟前", likes: ["同事A"], comments: [] },
@@ -315,118 +321,170 @@ body {
 
         // === 核心逻辑 ===
         function init() {
-            renderContactList();
-            renderMoments();
-        }
-        init();
+    // 每次初始化时，从原始数据深拷贝一份新的数据，实现“重置”
+    contacts = JSON.parse(JSON.stringify(initialContacts));
+    
+    // 清空之前的 DOM 内容
+    document.getElementById('contact-list').innerHTML = '';
+    document.getElementById('moments-feed').innerHTML = '';
+    
+    renderContactList();
+    renderMoments();
+    isGameEnded = false; // 重置标记
+}
+// 保持原本的 init() 调用
+init();
 
-        function switchTab(tab) {
-            document.querySelectorAll('.tab-item').forEach(i => i.classList.remove('active'));
-            document.getElementById('tab-exit').classList.add('hidden');
-            document.getElementById('tab-chat').classList.add('hidden');
-            document.getElementById('tab-moments').classList.add('hidden');
+function switchTab(tab) {
+    document.querySelectorAll('.tab-item').forEach(i => i.classList.remove('active'));
+    document.getElementById('tab-exit').classList.add('hidden');
+    document.getElementById('tab-chat').classList.add('hidden');
+    document.getElementById('tab-moments').classList.add('hidden');
 
-            if(tab === 'exit') {
-                document.querySelectorAll('.tab-item')[0].classList.add('active');
-                document.getElementById('tab-exit').classList.remove('hidden');
-            } else if(tab === 'chat') {
-                document.querySelectorAll('.tab-item')[1].classList.add('active');
-                document.getElementById('tab-chat').classList.remove('hidden');
-            } else {
-                document.querySelectorAll('.tab-item')[2].classList.add('active');
-                document.getElementById('tab-moments').classList.remove('hidden');
-            }
-        }
+    // 核心修改：如果之前是结束状态，并且现在切换到了聊天或朋友圈，则重启游戏
+    if (isGameEnded && (tab === 'chat' || tab === 'moments')) {
+        init(); 
+    }
+
+    if(tab === 'exit') {
+        document.querySelectorAll('.tab-item')[0].classList.add('active');
+        document.getElementById('tab-exit').classList.remove('hidden');
+        isGameEnded = true; // 标记游戏已结束
+    } else if(tab === 'chat') {
+        document.querySelectorAll('.tab-item')[1].classList.add('active');
+        document.getElementById('tab-chat').classList.remove('hidden');
+    } else {
+        document.querySelectorAll('.tab-item')[2].classList.add('active');
+        document.getElementById('tab-moments').classList.remove('hidden');
+    }
+}
 
         // === 聊天逻辑 ===
         function renderContactList() {
-            const list = document.getElementById('contact-list');
-            contacts.forEach(c => {
-                const d = document.createElement('div');
-                d.className = `chat-item ${c.isPinned ? 'pinned' : ''}`; // 置顶样式
-                const previewText = c.history ? c.history[c.history.length-1].text : '点击坦白...';
-                d.innerHTML = `
-                    <div class="avatar" style="background:${c.color}">${c.emoji}</div>
-                    <div class="info">
-                        <div class="name">${c.name}</div>
-                        <div class="preview">${previewText}</div>
-                    </div>
-                    <div class="time">${c.isPinned ? '昨天' : '刚刚'}</div>
-                `;
-                d.onclick = () => startChat(c);
-                list.appendChild(d);
-            });
+    const list = document.getElementById('contact-list');
+    
+    // 🔴 必须加这一行！防止每次更新时重复追加内容
+    list.innerHTML = ''; 
+
+    contacts.forEach(c => {
+        const d = document.createElement('div');
+        d.className = `chat-item ${c.isPinned ? 'pinned' : ''}`; // 置顶样式
+        
+        // 获取最后一条消息作为预览，如果没有则显示默认提示
+        let previewText = '点击坦白...';
+        if (c.history && c.history.length > 0) {
+            previewText = c.history[c.history.length - 1].text;
         }
+
+        d.innerHTML = `
+            <div class="avatar" style="background:${c.color}">${c.emoji}</div>
+            <div class="info">
+                <div class="name">${c.name}</div>
+                <div class="preview">${previewText}</div>
+            </div>
+            <div class="time">${c.isPinned ? '昨天' : '刚刚'}</div>
+        `;
+        d.onclick = () => startChat(c);
+        list.appendChild(d);
+    });
+}
 
         function startChat(contact) {
-            const screen = document.getElementById('chat-screen');
-            const box = document.getElementById('chat-box');
-            document.getElementById('chat-title').innerText = contact.name;
-            screen.classList.remove('hidden');
-            box.innerHTML = '';
-            
-            // 1. 如果有历史记录，先渲染
-            if(contact.history) {
-                const timeDiv = document.createElement('div');
-                timeDiv.className = 'history-divider';
-                timeDiv.innerText = '昨天 22:30';
-                box.appendChild(timeDiv);
+    const screen = document.getElementById('chat-screen');
+    const box = document.getElementById('chat-box');
+    document.querySelector('.tab-bar').classList.add('hidden');
 
-                contact.history.forEach(h => {
-                    addMsg(box, h.type, contact.emoji, h.text, contact.color, true);
-                });
+    document.getElementById('chat-title').innerText = contact.name;
+    screen.classList.remove('hidden');
+    box.innerHTML = '';
+    
+    // 1. 渲染历史记录 (包含刚产生的对话)
+    if(contact.history) {
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'history-divider';
+        timeDiv.innerText = '昨天 22:30';
+        box.appendChild(timeDiv);
 
-                const timeDiv2 = document.createElement('div');
-                timeDiv2.className = 'history-divider';
-                timeDiv2.innerText = '今天 09:00';
-                box.appendChild(timeDiv2);
+        contact.history.forEach(h => {
+            // 注意：这里不传 contact.id，防止历史记录被重复 push
+            addMsg(box, h.type, contact.emoji, h.text, contact.color, true);
+        });
+    }
+
+    // 核心修改：如果对象是女朋友，且已经聊过天（scenariosUsed 标记），则不再触发
+    if (contact.id === 'gf_real' && contact.hasChatted) {
+        return; // 直接结束，只显示历史记录
+    }
+
+    // 下面是新对话触发逻辑
+    const timeDiv2 = document.createElement('div');
+    timeDiv2.className = 'history-divider';
+    timeDiv2.innerText = '刚刚';
+    box.appendChild(timeDiv2);
+
+    const openMsg = contact.id === 'gf_real' ? '今天准备出柜。' : '其实我有件事想跟你说...';
+    
+    setTimeout(() => {
+        // 传入 contact.id 以便保存
+        addMsg(box, 'self', '🙂', openMsg, null, false, contact.id);
+        
+        setTimeout(() => {
+            if (contact.id !== 'gf_real') {
+                addMsg(box, 'self', '🙂', '我喜欢女生，我和女朋友在一起已经三年了。', null, false, contact.id);
             }
-
-            // 2. 自动开启新对话 (区分女友和其他人)
-            const openMsg = contact.id === 'gf_real' ? '今天准备出柜。' : '其实我有件事想跟你说...';
+            // 触发回复
+            triggerReplies(box, contact);
             
-            setTimeout(() => {
-                addMsg(box, 'self', '🙂', openMsg);
-                
-                // 接下来的逻辑
-                setTimeout(() => {
-                    if (contact.id !== 'gf_real') {
-                        addMsg(box, 'self', '🙂', '我喜欢女生，我和女朋友在一起已经三年了。');
-                    }
-                    
-                    // 触发回复
-                    triggerReplies(box, contact);
-                }, 1000);
-            }, 800);
-        }
+            // 标记女朋友已经聊过了
+            if (contact.id === 'gf_real') contact.hasChatted = true;
+
+        }, 1000);
+    }, 800);
+}
+
 
         function triggerReplies(box, contact) {
-            const scenario = contact.scenarios[Math.floor(Math.random() * contact.scenarios.length)];
-            let delay = 1500;
-            scenario.forEach((text) => {
-                delay += (1000 + Math.random() * 1000); 
-                setTimeout(() => {
-                    if(!document.getElementById('chat-screen').classList.contains('hidden')) {
-                        addMsg(box, 'other', contact.emoji, text, contact.color);
-                    }
-                }, delay);
-            });
-        }
+    const scenario = contact.scenarios[Math.floor(Math.random() * contact.scenarios.length)];
+    let delay = 1500;
+    scenario.forEach((text) => {
+        delay += (1000 + Math.random() * 1000); 
+        setTimeout(() => {
+            // 只有聊天窗口还开着才发送，且传入 ID 保存数据
+            if(!document.getElementById('chat-screen').classList.contains('hidden')) {
+                addMsg(box, 'other', contact.emoji, text, contact.color, false, contact.id);
+            }
+        }, delay);
+    });
+}
 
         function closeChat() {
             document.getElementById('chat-screen').classList.add('hidden');
+            document.querySelector('.tab-bar').classList.remove('hidden');
         }
 
-        function addMsg(box, type, emoji, text, color, isHistory=false) {
-            const div = document.createElement('div');
-            div.className = `message ${type}`;
-            const bg = type === 'other' ? color : '#ddd';
-            const avatarHtml = `<div class="avatar" style="width:40px;height:40px;font-size:20px;background:${bg};border:none;">${emoji}</div>`;
+        function addMsg(box, type, emoji, text, color, isHistory=false, contactId=null) {
+    const div = document.createElement('div');
+    div.className = `message ${type}`;
+    const bg = type === 'other' ? color : '#ddd';
+    const avatarHtml = `<div class="avatar" style="width:40px;height:40px;font-size:20px;background:${bg};border:none;">${emoji}</div>`;
+    
+    div.innerHTML = `${avatarHtml}<div class="msg-bubble">${text}</div>`;
+    box.appendChild(div);
+    if(!isHistory) box.scrollTop = box.scrollHeight;
+
+    // 核心修改：如果是实时发送的消息（不是历史记录渲染），则保存到联系人数据中
+    if (!isHistory && contactId) {
+        const currentContact = contacts.find(c => c.id === contactId);
+        if (currentContact) {
+            // 确保 history 数组存在
+            if (!currentContact.history) currentContact.history = [];
+            currentContact.history.push({ type, text });
             
-            div.innerHTML = `${avatarHtml}<div class="msg-bubble">${text}</div>`;
-            box.appendChild(div);
-            if(!isHistory) box.scrollTop = box.scrollHeight;
+            // 实时更新列表页的预览文字（虽然列表页被盖住了，但下次露出来时要是新的）
+            renderContactList(); 
         }
+    }
+}
 
         // === 朋友圈逻辑 ===
         function renderMoments() {
